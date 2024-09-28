@@ -1,18 +1,19 @@
 use std::{
     error::Error,
-    fs::{self}, io::{BufReader, BufWriter},
+    fs::{self},
+    io::{BufReader, BufWriter},
 };
 
 use clap::{command, Parser, Subcommand};
 use serde::{Deserialize, Serialize};
 
 /// Raw wrapper for FIEMAP ioctl.
-/// 
+///
 /// Definitions taken from `/usr/include/linux`.
 mod fiemap;
-mod scan;
 mod lift;
 mod report;
+mod scan;
 mod utils;
 
 pub(crate) type ResultType<T> = std::result::Result<T, Box<dyn Error>>;
@@ -25,7 +26,6 @@ const TEST_DEVICE: &str = "/dev/nvme0n1p5";
 
 //const TEST_PATH: &str = "/etc/fstab";
 //const TEST_DEVICE: &str = "/dev/mapper/luks-0c755fd5-99d6-4578-bb46-328eb72fd038";
-
 
 #[derive(Parser)]
 #[command(version, about, long_about = None)]
@@ -43,32 +43,30 @@ enum Commands {
     /// invoked while the host filesystem is mounted (ideally read-only).
     Scan {
         /// The file intended to be lifted.
-        /// 
+        ///
         /// Must be the same logical length as the device.
         file: String,
 
         /// The device intended to be lifted to.
-        /// 
+        ///
         /// This is required only so that the scanner can verify that
         /// the physical extents reported for the file can be read
         /// correctly from the underlying device, and are consistent
         /// with the file content.
-        device: String
+        device: String,
     },
     /// Lifts a previously scanned file to the device.
-    /// 
+    ///
     /// Previously captured mapping data is expected on stdin.
-    /// 
+    ///
     /// This is a highly destructive operation, must not be cancelled
     /// once started, cannot be undone, and will result in data loss
     /// if interrupted.  It is a silly thing to do.
     Lift {
         /// The device to lift onto.
-        device: String
+        device: String,
     },
 }
-
-
 
 fn main() -> ResultType<()> {
     env_logger::builder()
@@ -77,24 +75,20 @@ fn main() -> ResultType<()> {
 
     let cli = Cli::parse();
 
-
     match cli.command {
         Commands::Scan { file, device } => scan::do_scan(
             &mut fs::OpenOptions::new().read(true).open(file)?,
             &mut fs::OpenOptions::new().read(true).open(device)?,
-            &mut BufWriter::new(std::io::stdout())
+            &mut BufWriter::new(std::io::stdout()),
         )?,
         Commands::Lift { device } => lift::do_lift(
             fs::OpenOptions::new().read(true).write(true).open(device)?,
-            &mut BufReader::new(std::io::stdin())
+            &mut BufReader::new(std::io::stdin()),
         )?,
     }
 
     Ok(())
 }
-
-
-
 
 #[cfg(test)]
 mod tests {
@@ -109,47 +103,45 @@ mod tests {
 
     pub(crate) fn init_logger() {
         let _ = env_logger::builder()
-        .is_test(true)
-        .filter_level(log::LevelFilter::Debug)
-        .try_init();
+            .is_test(true)
+            .filter_level(log::LevelFilter::Debug)
+            .try_init();
     }
-
 
     #[derive(Deserialize, Serialize, Debug, PartialEq)]
     enum CSum {
         Zeros(),
-        NonZero(u64)
+        NonZero(u64),
     }
 
     #[derive(Deserialize, Serialize, Debug, PartialEq)]
     struct Blah {
         thing: u64,
-        other_thing: CSum
+        other_thing: CSum,
     }
 
     #[derive(Deserialize, Serialize, Debug, PartialEq)]
     struct Header {
-        message: String
+        message: String,
     }
 
     #[test]
-    fn serde_play() -> ResultType<()>{
+    fn serde_play() -> ResultType<()> {
         init_logger();
 
         let h = Header {
-            message: "Hello world!".to_string()
+            message: "Hello world!".to_string(),
         };
 
         let a = Blah {
             thing: 10,
-            other_thing: CSum::NonZero(40)
+            other_thing: CSum::NonZero(40),
         };
 
         let b = Blah {
             thing: 20,
-            other_thing: CSum::Zeros()
+            other_thing: CSum::Zeros(),
         };
-
 
         let mut buf: Vec<u8> = Vec::new();
         let mut serializer = serde_json::Serializer::new(&mut buf);
@@ -173,5 +165,4 @@ mod tests {
 
         Ok(())
     }
-
 }

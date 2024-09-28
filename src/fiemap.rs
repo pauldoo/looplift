@@ -1,9 +1,12 @@
 use bitflags::bitflags;
 use log::info;
 use std::{
-    ffi::c_int, fs::File, hash::{DefaultHasher, Hash, Hasher}, io, os::{fd::AsRawFd, raw::c_ulong, unix::fs::FileExt}
+    ffi::c_int,
+    fs::File,
+    hash::{DefaultHasher, Hash, Hasher},
+    io,
+    os::{fd::AsRawFd, raw::c_ulong, unix::fs::FileExt},
 };
-
 
 extern "C" {
     pub fn ioctl(fd: c_int, request: c_ulong, ...) -> c_int;
@@ -121,5 +124,3 @@ mod tests {
         assert_eq_hex!(0xC020660B, fs_ioc_fiemap());
     }
 }
-
-

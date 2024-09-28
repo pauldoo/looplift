@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub(crate) struct ReportSummary {
-    pub device_length: u64
+    pub device_length: u64,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -15,5 +15,5 @@ pub(crate) struct ReportExtent {
 #[derive(Debug, Serialize, Deserialize)]
 pub(crate) enum ExtentSource {
     Zeros,
-    Offset{ offset: u64, checksum: u64 }
+    Offset { offset: u64, checksum: u64 },
 }
