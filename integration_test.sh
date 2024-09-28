@@ -36,6 +36,8 @@ sudo chown $USER:$USER ./testloop/.
 # Put some data on the host FS
 
 cp -r ./target/release ./testloop/
+sync
+df -h ./testloop
 
 # Crete new inner FS
 
@@ -51,6 +53,7 @@ sudo chown $USER:$USER ./testloop/inner/.
 # Move files from host FS to inner FS
 
 mv ./testloop/release ./testloop/inner/
+df -h ./testloop/inner
 
 # Create mapping
 
