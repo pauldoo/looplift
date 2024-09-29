@@ -70,7 +70,7 @@ enum Commands {
 
 fn main() -> ResultType<()> {
     env_logger::builder()
-        .filter_level(log::LevelFilter::Debug)
+        .filter_level(log::LevelFilter::Info)
         .init();
 
     let cli = Cli::parse();

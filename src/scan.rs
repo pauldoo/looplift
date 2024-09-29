@@ -5,13 +5,13 @@ use std::{
     os::{fd::AsRawFd, unix::fs::FileExt},
 };
 
-use log::info;
+use log::{debug, info};
 use serde::Serialize;
 
 use crate::{
     fiemap::{fs_ioc_fiemap, ioctl, FiemapExtentFlag, FiemapFlag, FiemapRequestFull},
     report::{ExtentSource, ReportExtent, ReportSummary},
-    utils::default_vec,
+    utils::make_buffer,
     ResultType,
 };
 
@@ -54,7 +54,7 @@ pub(crate) fn do_scan(
         }
 
         for e in &fr.fm_extents[..fr.request.fm_mapped_extents.try_into().unwrap()] {
-            info!("Extent: {:?}", *e);
+            debug!("Extent: {:?}", *e);
             let flags = FiemapExtentFlag::from_bits(e.fe_flags).expect("Unknown extend bits set.");
 
             assert!(e.fe_logical >= file_offset);
@@ -69,7 +69,7 @@ pub(crate) fn do_scan(
                 re.serialize(&mut serializer)?;
             }
 
-            info!("Flags: {:?}", flags);
+            debug!("Flags: {:?}", flags);
             assert!(!flags.contains(FiemapExtentFlag::ENCODED));
 
             let readable_length = u64::min(file_length - e.fe_logical, e.fe_length);
@@ -125,9 +125,9 @@ fn check_equality_and_compute_checksum(
     b_offset: u64,
     length: u64,
 ) -> ResultType<u64> {
-    let buf_len = u64::min(64 * 1024, length);
-    let mut a_buf = default_vec::<u8>(buf_len.try_into().unwrap());
-    let mut b_buf = default_vec::<u8>(buf_len.try_into().unwrap());
+    let mut a_buf = make_buffer(length);
+    let mut b_buf = make_buffer(length);
+    let buf_len:u64 = a_buf.len().try_into().unwrap();
 
     let mut hasher_a = DefaultHasher::new();
     let mut hasher_b = DefaultHasher::new();

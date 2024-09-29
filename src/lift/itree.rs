@@ -48,6 +48,11 @@ impl<T: IntervalTreeEntry> IntervalTree<T> {
     pub fn is_empty(&self) -> bool {
         self.root_node.is_empty()
     }
+    
+    /// Removes the first (leftmost?) entry.
+    pub fn pop_first(&mut self) -> Option<T> {
+        self.root_node.pop_first()
+    }
 }
 
 #[derive(Debug)]
@@ -229,6 +234,17 @@ impl<T: IntervalTreeEntry> NodeType<T> {
             }
         }
     }
+    
+    fn pop_first(&mut self) -> Option<T> {
+        match self {
+            NodeType::Empty => None,
+            NodeType::Populated(p) => {
+                p.left_node.pop_first()
+                    .or_else(|| p.here.pop())
+                    .or_else(|| p.right_node.pop_first())
+            }
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -257,7 +273,7 @@ impl<T: PartialOrd> RangeOps<T> for Range<T> {
         (self.start <= other.start) && (other.end <= self.end)
     }
     fn overlaps_range(&self, other: &Range<T>) -> bool {
-        (self.end <= other.start) == (other.end <= self.start)
+        !((self.end <= other.start) || (other.end <= self.start))
     }
 }
 
@@ -295,8 +311,33 @@ mod tests {
         assert!((0..10).overlaps_range(&(10..20)) == false);
         assert!((0..11).overlaps_range(&(10..20)) == true);
         assert!((0..30).overlaps_range(&(10..20)) == true);
+        assert!((10..20).overlaps_range(&(10..20)) == true);
+        assert!((12..18).overlaps_range(&(10..20)) == true);
         assert!((19..30).overlaps_range(&(10..20)) == true);
         assert!((20..30).overlaps_range(&(10..20)) == false);
+    }
+
+    #[test]
+    fn overlaps_spam() {
+        let min = 0u64;
+        let max = 10u64;
+
+        for a_b in min..max {
+            for a_e in (a_b + 1)..=max {
+
+                for b_b in min..max {
+                    for b_e in (b_b + 1)..=max {
+
+                        let expected = (min..max).into_iter()
+                            .any(|q| (a_b..a_e).contains(&q) && (b_b..b_e).contains(&q));
+
+                        let actual = (a_b..a_e).overlaps_range(&(b_b..b_e));
+                        assert_eq!(expected, actual);
+                    }
+                }
+            }
+        }
+
     }
 
     #[test]

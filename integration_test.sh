@@ -22,7 +22,7 @@ fi
 rm -f testloop.img
 
 # Create new host FS
-LENGTH=$((1024 * 1024 * 1024))
+LENGTH=$((2 * 1024 * 1024 * 1024))
 
 truncate -s $LENGTH ./testloop.img
 
@@ -35,7 +35,7 @@ sudo chown $USER:$USER ./testloop/.
 
 # Put some data on the host FS
 
-cp -r ./target/release ./testloop/
+cp -r ./target ./testloop/data
 sync
 df -h ./testloop
 
@@ -52,7 +52,7 @@ sudo chown $USER:$USER ./testloop/inner/.
 
 # Move files from host FS to inner FS
 
-mv ./testloop/release ./testloop/inner/
+mv ./testloop/data ./testloop/inner/
 df -h ./testloop/inner
 
 # Create mapping
@@ -75,6 +75,6 @@ cat ./test_mapping.gz | gzip -dc | sudo ./target/release/looplift lift ./testloo
 xfs_repair -n ./testloop.img
 sudo mount -t xfs ./testloop.img ./testloop
 
-(diff -r ./target/release ./testloop/release && echo 'DIFF PASSED') || (echo 'DIFF FAILED' && exit 1)
+(diff -r ./target ./testloop/data && echo 'DIFF PASSED') || (echo 'DIFF FAILED' && exit 1)
 
 echo "ALL TESTS PASS?!?"
