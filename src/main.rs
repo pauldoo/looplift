@@ -18,17 +18,12 @@ mod utils;
 
 pub(crate) type ResultType<T> = std::result::Result<T, Box<dyn Error>>;
 
-// A random file that exists on my system on ext4.
-//const TEST_PATH: &str = "/boot/ostree/default-14cb0a46f0d5ea6de660642da798e63f45bf1466c7141826fcf30f1f46f54652/initramfs-6.9.12-100.fc39.x86_64.img";
-//const TEST_PATH: &str = "/boot/test_file";
-const TEST_PATH: &str = "/boot/zerod";
-const TEST_DEVICE: &str = "/dev/nvme0n1p5";
-
-//const TEST_PATH: &str = "/etc/fstab";
-//const TEST_DEVICE: &str = "/dev/mapper/luks-0c755fd5-99d6-4578-bb46-328eb72fd038";
-
+/// Lift loop files from within a filesystem to the block device hosting that filesystem.
+///
+/// Lifting is a two-step process.  First, use the `scan` command to obtain mapping details
+/// for the file to be lifted.  Second, use the `lift` command to perform the promotion.
 #[derive(Parser)]
-#[command(version, about, long_about = None)]
+#[command(version, about)]
 struct Cli {
     #[command(subcommand)]
     command: Commands,

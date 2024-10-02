@@ -127,6 +127,7 @@ fn check_equality_and_compute_checksum(
 ) -> ResultType<u64> {
     let mut a_buf = make_buffer(length);
     let mut b_buf = make_buffer(length);
+    assert_eq!(a_buf.len(), b_buf.len());
     let buf_len:u64 = a_buf.len().try_into().unwrap();
 
     let mut hasher_a = DefaultHasher::new();

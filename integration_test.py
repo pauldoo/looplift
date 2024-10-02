@@ -20,9 +20,21 @@ user = os.environ.get('USER')
 
 looplift_binary = "./target/release/looplift"
 
-image_length = 2 * 1024**3
+image_length = 1500 * 1024**2
+
 
 def main():
+    """An end to end test.
+
+    We create a host ext4 filesystem, and put some test files onto it.
+
+    Within that FS we create a new loopback XFS filesystem, and move the
+    test files from the ext4 to XFS filesystem.
+
+    We then use looplift commands to "lift" that nested loop device file
+    to the outer file, "promoting" the XFS filesystem to the host FS device.
+    """
+
     print("Starting test")
     build()
     cleanup()
@@ -102,7 +114,7 @@ def apply_mapping():
     return sha256
 
 def mount_promoted_fs(fs_type):
-    execute(f"sudo mount -t {fs_type} {test_image_inner} {test_dir_inner}")
+    execute(f"sudo mount -t {fs_type} {test_image} {test_dir}")
 
 def validate_data():
     execute(f"diff -r {test_data} {test_dir}/data")

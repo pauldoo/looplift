@@ -1,6 +1,10 @@
 [package]
 name = "looplift"
 version = "0.1.0"
+description = "Lift loop files from within a filesystem to the block device hosting that filesystem."
+license = "MIT"
+authors = ["Paul Richards <paul.richards@gmail.com>"]
+readme = "README.md"
 edition = "2021"
 
 [dependencies]
