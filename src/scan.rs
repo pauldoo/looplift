@@ -115,5 +115,7 @@ pub(crate) fn do_scan(
         }
     }
 
+    fops.log_stats();
+
     Ok(())
 }

@@ -1,6 +1,6 @@
 use std::{
     collections::VecDeque,
-    io::{self},
+    io::{self, Read},
     ops::Range,
 };
 
@@ -16,22 +16,46 @@ use crate::{
 
 mod itree;
 
-pub(crate) fn do_lift(mut device: std::fs::File, input: &mut impl io::Read) -> ResultType<()> {
-    let device_length = device.metadata()?.len();
-    let mut deserializer = serde_json::Deserializer::from_reader(input);
+struct OperationQueues {
+    zeroing: VecDeque<Range<u64>>,
+    csums: VecDeque<CsumOp>,
+    copies: IntervalTree<CopyOp>,
+}
 
+pub(crate) fn do_lift(device: std::fs::File, input: &mut impl io::Read) -> ResultType<()> {
+    let mut fops = FileOps::new();
+
+    let opq: OperationQueues = load_mapping(&device, input, &mut fops)?;
+    perform_shuffles(&device, opq.copies, &mut fops)?;
+    fill_zeros(&device, opq.zeroing, &mut fops)?;
+    validate_csums(&device, opq.csums, &mut fops)?;
+
+    info!("All done.");
+
+    fops.log_stats();
+
+    Ok(())
+}
+
+fn load_mapping(
+    device: &std::fs::File,
+    input: &mut impl Read,
+    fops: &mut FileOps,
+) -> ResultType<OperationQueues> {
+    let device_length = device.metadata()?.len();
+    info!("Parsing report and validating initial checksums.");
+
+    let mut deserializer = serde_json::Deserializer::from_reader(input);
     let sr = ReportSummary::deserialize(&mut deserializer)?;
     assert_eq!(sr.device_length, device_length);
 
-    let mut fops = FileOps::new();
-
-    let mut zeroing_queue = VecDeque::<Range<u64>>::new();
-    let mut final_csum_queue = VecDeque::<CsumOp>::new();
-    let mut copy_queue = IntervalTree::<CopyOp>::new(0..device_length);
+    let mut result = OperationQueues {
+        zeroing: Default::default(),
+        csums: Default::default(),
+        copies: IntervalTree::new(0..device_length),
+    };
 
     let mut expected_next_offset = 0u64;
-
-    info!("Parsing report and validating initial checksums.");
     while expected_next_offset < device_length {
         let e = ReportExtent::deserialize(&mut deserializer)?;
         assert_eq!(e.destination_offset, expected_next_offset);
@@ -39,28 +63,36 @@ pub(crate) fn do_lift(mut device: std::fs::File, input: &mut impl io::Read) -> R
 
         match e.source {
             crate::report::ExtentSource::Zeros => {
-                zeroing_queue.push_back(e.destination_offset..(e.destination_offset + e.length));
+                result
+                    .zeroing
+                    .push_back(e.destination_offset..(e.destination_offset + e.length));
             }
             crate::report::ExtentSource::Offset { offset, checksum } => {
-                fops.validate_checksum(&device, offset, e.length, checksum)?;
+                fops.validate_checksum(device, offset, e.length, checksum)?;
 
-                final_csum_queue.push_back(CsumOp {
+                result.csums.push_back(CsumOp {
                     offset: e.destination_offset,
                     length: e.length,
                     csum: checksum,
                 });
 
-                assert!(copy_queue.insert(CopyOp {
+                assert!(result.copies.insert(CopyOp {
                     source: offset..(offset + e.length),
                     destination_offset: e.destination_offset
                 }));
             }
         }
     }
-
     info!("Extents loaded and csums match");
+    Ok(result)
+}
 
-    info!("Copying extend data");
+fn perform_shuffles(
+    device: &std::fs::File,
+    mut copy_queue: IntervalTree<CopyOp>,
+    fops: &mut FileOps,
+) -> ResultType<()> {
+    info!("Copying extent data");
     'copy_loop: while !copy_queue.is_empty() {
         let op: CopyOp = copy_queue.first().unwrap().clone();
 
@@ -78,7 +110,7 @@ pub(crate) fn do_lift(mut device: std::fs::File, input: &mut impl io::Read) -> R
         if overlapping_sources.is_empty() {
             // Nothing overlaps, including self which is still in the tree, do the copy
             assert!(copy_queue.remove(&op));
-            fops.copy_segment(&mut device, &op.source, op.destination_offset)?;
+            fops.copy_segment(device, &op.source, op.destination_offset)?;
             continue;
         }
 
@@ -131,7 +163,7 @@ pub(crate) fn do_lift(mut device: std::fs::File, input: &mut impl io::Read) -> R
 
         // Some things overlap, but they all do so with identical extents.
         assert!(copy_queue.remove(&op));
-        fops.swap_segment(&mut device, &op.source, op.destination_offset)?;
+        fops.swap_segment(device, &op.source, op.destination_offset)?;
         for other_op in &overlapping_sources {
             assert!(&op != other_op);
             assert!(dest_range == other_op.source);
@@ -142,22 +174,34 @@ pub(crate) fn do_lift(mut device: std::fs::File, input: &mut impl io::Read) -> R
         }
     }
 
+    Ok(())
+}
+
+fn fill_zeros(
+    device: &std::fs::File,
+    mut zeroing_queue: VecDeque<Range<u64>>,
+    fops: &mut FileOps,
+) -> ResultType<()> {
     info!("Writing zero extents");
     while !zeroing_queue.is_empty() {
         let range = zeroing_queue.pop_front().unwrap();
 
-        fops.fill_zeros(&mut device, &range)?;
+        fops.fill_zeros(device, &range)?;
     }
+    Ok(())
+}
 
+fn validate_csums(
+    device: &std::fs::File,
+    mut csums: VecDeque<CsumOp>,
+    fops: &mut FileOps,
+) -> ResultType<()> {
     info!("Validating final csums");
-    while !final_csum_queue.is_empty() {
-        let csum = final_csum_queue.pop_front().unwrap();
+    while !csums.is_empty() {
+        let csum = csums.pop_front().unwrap();
 
-        fops.validate_checksum(&device, csum.offset, csum.length, csum.csum)?;
+        fops.validate_checksum(device, csum.offset, csum.length, csum.csum)?;
     }
-
-    info!("All done.");
-
     Ok(())
 }
 

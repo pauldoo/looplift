@@ -5,6 +5,9 @@ use std::{
     os::unix::fs::FileExt,
 };
 
+use indicatif::{HumanBytes, HumanCount};
+use log::info;
+
 use crate::ResultType;
 
 const BUFFER_LENGTH: usize = 128 * 1024;
@@ -20,6 +23,10 @@ fn make_buffer() -> Vec<u8> {
 pub(crate) struct FileOps {
     buf_a: Vec<u8>,
     buf_b: Vec<u8>,
+    read_ops: u64,
+    read_bytes: u64,
+    write_ops: u64,
+    write_bytes: u64,
 }
 
 impl FileOps {
@@ -27,14 +34,18 @@ impl FileOps {
         Self {
             buf_a: make_buffer(),
             buf_b: make_buffer(),
+            read_ops: 0,
+            read_bytes: 0,
+            write_ops: 0,
+            write_bytes: 0,
         }
     }
 
     pub fn check_equality_and_compute_checksum(
         &mut self,
-        a: &mut File,
+        a: &File,
         a_offset: u64,
-        b: &mut File,
+        b: &File,
         b_offset: u64,
         length: u64,
     ) -> ResultType<u64> {
@@ -55,6 +66,9 @@ impl FileOps {
             b_chunk.hash(&mut hasher_b);
 
             read += chunk_len;
+
+            self.read_ops += 2;
+            self.read_bytes += 2 * chunk_len;
         }
 
         let hash_a = hasher_a.finish();
@@ -66,7 +80,7 @@ impl FileOps {
 
     pub fn copy_segment(
         &mut self,
-        f: &mut File,
+        f: &File,
         source: &Range<u64>,
         dest_offset: u64,
     ) -> ResultType<()> {
@@ -78,13 +92,18 @@ impl FileOps {
             f.read_exact_at(chunk, source.start + read)?;
             f.write_all_at(chunk, dest_offset + read)?;
             read += chunk_len;
+
+            self.read_ops += 1;
+            self.read_bytes += chunk_len;
+            self.write_ops += 1;
+            self.write_bytes += chunk_len;
         }
         Ok(())
     }
 
     pub fn swap_segment(
         &mut self,
-        f: &mut File,
+        f: &File,
         source: &Range<u64>,
         dest_offset: u64,
     ) -> ResultType<()> {
@@ -102,17 +121,25 @@ impl FileOps {
             f.write_all_at(chunk_b, source.start + read)?;
 
             read += chunk_len;
+
+            self.read_ops += 2;
+            self.read_bytes += 2 * chunk_len;
+            self.write_ops += 2;
+            self.write_bytes += 2 * chunk_len;
         }
         Ok(())
     }
 
-    pub fn fill_zeros(&mut self, f: &mut File, range: &Range<u64>) -> ResultType<()> {
+    pub fn fill_zeros(&mut self, f: &File, range: &Range<u64>) -> ResultType<()> {
         self.buf_a.fill_with(Default::default);
         let mut out_offset = range.start;
         while out_offset < range.end {
             let chunk_len = u64::min(BUFFER_LENGTH.try_into().unwrap(), range.end - out_offset);
             f.write_all_at(&self.buf_a[0..chunk_len.try_into().unwrap()], out_offset)?;
             out_offset += chunk_len;
+
+            self.write_ops += 1;
+            self.write_bytes += chunk_len;
         }
 
         Ok(())
@@ -136,11 +163,29 @@ impl FileOps {
 
             chunk.hash(&mut hasher);
             read += chunk_len;
+
+            self.read_ops += 1;
+            self.read_bytes += chunk_len;
         }
 
         let hash = hasher.finish();
         assert_eq!(hash, expected_csum, "Checksums should match");
 
         Ok(())
+    }
+
+    pub(crate) fn log_stats(&self) {
+        info!(
+            "Read {} in {} operations ({} per operation)",
+            HumanBytes(self.read_bytes),
+            HumanCount(self.read_ops),
+            HumanBytes(self.read_bytes / self.read_ops)
+        );
+        info!(
+            "Wrote {} in {} operations ({} per operation)",
+            HumanBytes(self.write_bytes),
+            HumanCount(self.write_ops),
+            HumanBytes(self.write_bytes / self.write_ops)
+        );
     }
 }
