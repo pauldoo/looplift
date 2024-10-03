@@ -4,6 +4,7 @@ import hashlib
 import os
 import shutil
 import sys
+import uuid
 
 # Source of some test files
 test_data = "./target"
@@ -11,7 +12,8 @@ test_data = "./target"
 test_image = "./testloop.img"
 test_dir = "./testloop"
 
-test_image_inner = f"{test_dir}/inner.img"
+image_filename = f"{str(uuid.uuid4())}.img"
+test_image_inner = f"{test_dir}/{image_filename}"
 test_dir_inner = f"{test_dir}/inner"
 
 test_mapping = "test_mapping.gz"
@@ -92,7 +94,7 @@ def copy_test_data():
 
 def move_test_data_to_inner():
     print("Moving test data from outer to inner FS")
-    shutil.move(f"{test_dir}/data", f"{test_dir_inner}/data")
+    execute(f"sudo rsync -a -x -H -A -X --sparse --remove-source-files --exclude {image_filename} {test_dir}/ {test_dir_inner}/")
 
 def remount_outer_ro():
     execute(f"sudo umount {test_dir_inner}")
