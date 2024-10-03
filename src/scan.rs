@@ -1,17 +1,15 @@
 use std::{
-    fs::File,
-    hash::{DefaultHasher, Hash, Hasher},
-    io::{self, Read},
-    os::{fd::AsRawFd, unix::fs::FileExt},
+    io::{self},
+    os::fd::AsRawFd,
 };
 
-use log::{debug, info};
+use log::debug;
 use serde::Serialize;
 
 use crate::{
     fiemap::{fs_ioc_fiemap, ioctl, FiemapExtentFlag, FiemapFlag, FiemapRequestFull},
     report::{ExtentSource, ReportExtent, ReportSummary},
-    utils::make_buffer,
+    utils::FileOps,
     ResultType,
 };
 
@@ -24,6 +22,8 @@ pub(crate) fn do_scan(
     if file_length != device.metadata()?.len() {
         return Err("File length should be the same as the device.".into());
     }
+
+    let mut fops = FileOps::new();
 
     let mut serializer = serde_json::Serializer::new(out);
     ReportSummary {
@@ -82,7 +82,7 @@ pub(crate) fn do_scan(
                 };
                 re.serialize(&mut serializer)?;
             } else {
-                let csum = check_equality_and_compute_checksum(
+                let csum = fops.check_equality_and_compute_checksum(
                     file,
                     e.fe_logical,
                     device,
@@ -116,42 +116,4 @@ pub(crate) fn do_scan(
     }
 
     Ok(())
-}
-
-fn check_equality_and_compute_checksum(
-    a: &mut File,
-    a_offset: u64,
-    b: &mut File,
-    b_offset: u64,
-    length: u64,
-) -> ResultType<u64> {
-    let mut a_buf = make_buffer(length);
-    let mut b_buf = make_buffer(length);
-    assert_eq!(a_buf.len(), b_buf.len());
-    let buf_len:u64 = a_buf.len().try_into().unwrap();
-
-    let mut hasher_a = DefaultHasher::new();
-    let mut hasher_b = DefaultHasher::new();
-
-    let mut read = 0u64;
-    while read < length {
-        let chunk_len = u64::min(buf_len, length - read);
-        let a_chunk = &mut a_buf[0..chunk_len.try_into().unwrap()];
-        let b_chunk = &mut b_buf[0..chunk_len.try_into().unwrap()];
-        a.read_exact_at(a_chunk, a_offset + read)?;
-        b.read_exact_at(b_chunk, b_offset + read)?;
-
-        assert_eq!(a_chunk, b_chunk);
-
-        a_chunk.hash(&mut hasher_a);
-        b_chunk.hash(&mut hasher_b);
-
-        read += chunk_len;
-    }
-
-    let hash_a = hasher_a.finish();
-    let hash_b = hasher_b.finish();
-    assert_eq!(hash_a, hash_b);
-
-    Ok(hash_a)
 }

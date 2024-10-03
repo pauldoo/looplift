@@ -1,7 +1,4 @@
-use std::{
-    io::Empty,
-    ops::{Range, RangeBounds},
-};
+use std::ops::Range;
 
 use crate::lift::RangeOps;
 
@@ -21,7 +18,6 @@ pub(super) struct IntervalTree<T: IntervalTreeEntry> {
 
 impl<T: IntervalTreeEntry> IntervalTree<T> {
     pub fn new(span: Range<u64>) -> Self {
-        assert!(span.start >= 0);
         assert!(span.start < span.end);
         Self {
             span,
@@ -50,9 +46,9 @@ impl<T: IntervalTreeEntry> IntervalTree<T> {
     pub fn is_empty(&self) -> bool {
         self.root_node.is_empty()
     }
-    
+
     /// Removes the first (leftmost?) entry.
-    pub fn first<'a>(&'a self) -> Option<&'a T> {
+    pub fn first(&self) -> Option<&T> {
         self.root_node.first()
     }
 }
@@ -79,7 +75,7 @@ impl<T: IntervalTreeEntry> NodeType<T> {
                     left_node: NodeType::Empty,
                     right_node: NodeType::Empty,
                 }));
-                return true;
+                true
             }
             NodeType::Populated(p) => {
                 let was_inline_single = !suppress_inline_singleton_flag && p.is_inline_singleton();
@@ -127,9 +123,7 @@ impl<T: IntervalTreeEntry> NodeType<T> {
         assert!(self_span.overlaps_range(query_span));
 
         match self {
-            NodeType::Empty => {
-                return;
-            }
+            NodeType::Empty => {}
             NodeType::Populated(p) => {
                 for h in &p.here {
                     if query_span.overlaps_range(&h.interval()) {
@@ -157,9 +151,7 @@ impl<T: IntervalTreeEntry> NodeType<T> {
         assert!(self_span.contains_range(&entry.interval()));
 
         match self {
-            NodeType::Empty => {
-                return false;
-            }
+            NodeType::Empty => false,
             NodeType::Populated(p) => {
                 if p.is_inline_singleton() {
                     // Special case for inline singletons
@@ -236,15 +228,15 @@ impl<T: IntervalTreeEntry> NodeType<T> {
             }
         }
     }
-    
-    fn first<'a>(&'a self) -> Option<&T> {
+
+    fn first(&self) -> Option<&T> {
         match self {
             NodeType::Empty => None,
-            NodeType::Populated(p) => {
-                p.left_node.first()
-                    .or_else(|| p.here.first())
-                    .or_else(|| p.right_node.first())
-            }
+            NodeType::Populated(p) => p
+                .left_node
+                .first()
+                .or_else(|| p.here.first())
+                .or_else(|| p.right_node.first()),
         }
     }
 }
@@ -265,11 +257,9 @@ impl<T: IntervalTreeEntry> BinaryNode<T> {
     }
 }
 
-
-
 #[cfg(test)]
 mod tests {
-    use std::{collections::btree_set::Intersection, ops::Range};
+    use std::ops::Range;
 
     use crate::tests::init_logger;
 

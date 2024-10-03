@@ -1,12 +1,5 @@
 use bitflags::bitflags;
-use log::info;
-use std::{
-    ffi::c_int,
-    fs::File,
-    hash::{DefaultHasher, Hash, Hasher},
-    io,
-    os::{fd::AsRawFd, raw::c_ulong, unix::fs::FileExt},
-};
+use std::{ffi::c_int, os::raw::c_ulong};
 
 extern "C" {
     pub fn ioctl(fd: c_int, request: c_ulong, ...) -> c_int;

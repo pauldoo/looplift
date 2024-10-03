@@ -5,7 +5,6 @@ use std::{
 };
 
 use clap::{command, Parser, Subcommand};
-use serde::{Deserialize, Serialize};
 
 /// Raw wrapper for FIEMAP ioctl.
 ///
@@ -89,7 +88,6 @@ fn main() -> ResultType<()> {
 mod tests {
 
     use core::str;
-    use std::io::{Cursor, Read};
 
     use log::info;
     use serde::{Deserialize, Serialize};
