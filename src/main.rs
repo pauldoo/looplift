@@ -5,6 +5,7 @@ use std::{
 };
 
 use clap::{command, Parser, Subcommand};
+use log::{info, warn};
 
 /// Raw wrapper for FIEMAP ioctl.
 ///
@@ -57,6 +58,17 @@ enum Commands {
     /// once started, cannot be undone, and will result in data loss
     /// if interrupted.  It is a silly thing to do.
     Lift {
+        /// Dry-run mode.
+        ///
+        /// Go through all of the steps for lifting, including reading
+        /// of data, but does not write anything. This is enabled by default,
+        /// use `--no-dry-run` to disable.
+        ///
+        /// It is recommended to perform a dry-run first to confirm
+        /// that the tool does not crash, or run out of memory, or have
+        /// some other unforseen issue on the particular data.
+        #[clap(long, default_value_t = true)]
+        dry_run: std::primitive::bool,
         /// The device to lift onto.
         device: String,
     },
@@ -75,10 +87,22 @@ fn main() -> ResultType<()> {
             &mut fs::OpenOptions::new().read(true).open(device)?,
             &mut BufWriter::new(std::io::stdout()),
         )?,
-        Commands::Lift { device } => lift::do_lift(
-            fs::OpenOptions::new().read(true).write(true).open(device)?,
-            &mut BufReader::new(std::io::stdin()),
-        )?,
+        Commands::Lift { device, dry_run } => {
+            if dry_run {
+                info!("Dry-run mode.");
+            } else {
+                warn!("Real mode, not a dry-run!");
+            }
+
+            lift::do_lift(
+                fs::OpenOptions::new()
+                    .read(true)
+                    .write(!dry_run)
+                    .open(device)?,
+                &mut BufReader::new(std::io::stdin()),
+                dry_run,
+            )?
+        }
     }
 
     Ok(())

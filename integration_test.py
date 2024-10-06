@@ -48,10 +48,24 @@ def main():
     create_inner_fs("xfs")
     move_test_data_to_inner()
 
+    print("Optimizing and remounting read-only")
     remount_outer_ro()
-    hc1 = obtain_mapping()
-    hc2 = apply_mapping()
-    assert hc1 == hc2, f"Hash codes should match {hc1} {hc2}"
+    print("Computing content hashes (before state)")
+    original_outer = content_hash(test_image)
+    original_inner = content_hash(test_image_inner)
+
+
+    obtain_mapping() # also unmounts
+
+     # Dryrun.
+    apply_mapping(True)
+    hc = content_hash(test_image)
+    assert hc == original_outer, f"Dry run should not alter image."
+
+    # Real lift.
+    apply_mapping(False)
+    hc = content_hash(test_image)
+    assert hc == original_inner, f"Actual lift should result in expected hash."
 
     mount_promoted_fs("xfs")
 
@@ -101,19 +115,20 @@ def remount_outer_ro():
     execute(f"fallocate --dig-holes {test_image_inner}")
     execute(f"sudo mount -o remount,ro {test_dir}")
 
+def content_hash(file):
+    with open(file, "rb") as f:
+        sha256 = hashlib.file_digest(f, "sha256").hexdigest()
+    print(f"File {file} has content hash: {sha256}")
+    return sha256
+
 def obtain_mapping():
-    with open(test_image_inner, "rb") as f:
-        sha256 = hashlib.file_digest(f, "sha256").hexdigest()
-
-    execute(f"{looplift_binary} scan {test_image_inner} {test_image} | gzip -c > {test_mapping}")
+    print("Obtaiing looplift mapping")
+    execute(f"bash -o pipefail -c \"{looplift_binary} scan {test_image_inner} {test_image} | gzip -c > {test_mapping}\"")
     execute(f"sudo umount {test_dir}")
-    return sha256
 
-def apply_mapping():
-    execute(f"zcat {test_mapping} | {looplift_binary} lift {test_image}")
-    with open(test_image, "rb") as f:
-        sha256 = hashlib.file_digest(f, "sha256").hexdigest()
-    return sha256
+def apply_mapping(dry_run):
+    print("Looplift dry-run" if dry_run else "Looplift for real")
+    execute(f"bash -o pipefail -c \"zcat {test_mapping} | {looplift_binary} lift {"" if dry_run else "--dry-run false "}{test_image}\"")
 
 def mount_promoted_fs(fs_type):
     execute(f"sudo mount -t {fs_type} {test_image} {test_dir}")

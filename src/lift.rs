@@ -22,13 +22,21 @@ struct OperationQueues {
     copies: IntervalTree<CopyOp>,
 }
 
-pub(crate) fn do_lift(device: std::fs::File, input: &mut impl io::Read) -> ResultType<()> {
-    let mut fops = FileOps::new();
+pub(crate) fn do_lift(
+    device: std::fs::File,
+    input: &mut impl io::Read,
+    dry_run: bool,
+) -> ResultType<()> {
+    let mut fops = FileOps::new(dry_run);
 
     let opq: OperationQueues = load_mapping(&device, input, &mut fops)?;
     perform_shuffles(&device, opq.copies, &mut fops)?;
     fill_zeros(&device, opq.zeroing, &mut fops)?;
-    validate_csums(&device, opq.csums, &mut fops)?;
+    if !dry_run {
+        validate_csums(&device, opq.csums, &mut fops)?;
+    } else {
+        info!("Dry-run, so not confirming final checksums.");
+    }
 
     info!("All done.");
 

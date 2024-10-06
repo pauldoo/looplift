@@ -23,7 +23,9 @@ pub(crate) fn do_scan(
         return Err("File length should be the same as the device.".into());
     }
 
-    let mut fops = FileOps::new();
+    let mut fops = FileOps::new(
+        true, /* flag doesn't matter, as we don't attempt writes during scan. */
+    );
 
     let mut serializer = serde_json::Serializer::new(out);
     ReportSummary {

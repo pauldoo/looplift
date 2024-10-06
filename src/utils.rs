@@ -21,6 +21,7 @@ fn make_buffer() -> Vec<u8> {
 
 /// Structure to own some IO buffers and provide IO operations.
 pub(crate) struct FileOps {
+    dry_run: bool,
     buf_a: Vec<u8>,
     buf_b: Vec<u8>,
     read_ops: u64,
@@ -30,8 +31,9 @@ pub(crate) struct FileOps {
 }
 
 impl FileOps {
-    pub fn new() -> Self {
+    pub fn new(dry_run: bool) -> Self {
         Self {
+            dry_run,
             buf_a: make_buffer(),
             buf_b: make_buffer(),
             read_ops: 0,
@@ -89,14 +91,18 @@ impl FileOps {
         while read < length {
             let chunk_len = u64::min(BUFFER_LENGTH.try_into().unwrap(), length - read);
             let chunk = &mut self.buf_a[0..chunk_len.try_into().unwrap()];
-            f.read_exact_at(chunk, source.start + read)?;
-            f.write_all_at(chunk, dest_offset + read)?;
-            read += chunk_len;
 
+            f.read_exact_at(chunk, source.start + read)?;
             self.read_ops += 1;
             self.read_bytes += chunk_len;
-            self.write_ops += 1;
-            self.write_bytes += chunk_len;
+
+            if !self.dry_run {
+                f.write_all_at(chunk, dest_offset + read)?;
+                self.write_ops += 1;
+                self.write_bytes += chunk_len;
+            }
+
+            read += chunk_len;
         }
         Ok(())
     }
@@ -116,21 +122,26 @@ impl FileOps {
 
             f.read_exact_at(chunk_a, source.start + read)?;
             f.read_exact_at(chunk_b, dest_offset + read)?;
-
-            f.write_all_at(chunk_a, dest_offset + read)?;
-            f.write_all_at(chunk_b, source.start + read)?;
-
-            read += chunk_len;
-
             self.read_ops += 2;
             self.read_bytes += 2 * chunk_len;
-            self.write_ops += 2;
-            self.write_bytes += 2 * chunk_len;
+
+            if !self.dry_run {
+                f.write_all_at(chunk_a, dest_offset + read)?;
+                f.write_all_at(chunk_b, source.start + read)?;
+                self.write_ops += 2;
+                self.write_bytes += 2 * chunk_len;
+            }
+
+            read += chunk_len;
         }
         Ok(())
     }
 
     pub fn fill_zeros(&mut self, f: &File, range: &Range<u64>) -> ResultType<()> {
+        if self.dry_run {
+            return Ok(());
+        }
+
         self.buf_a.fill_with(Default::default);
         let mut out_offset = range.start;
         while out_offset < range.end {
@@ -175,17 +186,21 @@ impl FileOps {
     }
 
     pub(crate) fn log_stats(&self) {
-        info!(
-            "Read {} in {} operations ({} per operation)",
-            HumanBytes(self.read_bytes),
-            HumanCount(self.read_ops),
-            HumanBytes(self.read_bytes / self.read_ops)
-        );
-        info!(
-            "Wrote {} in {} operations ({} per operation)",
-            HumanBytes(self.write_bytes),
-            HumanCount(self.write_ops),
-            HumanBytes(self.write_bytes / self.write_ops)
-        );
+        if self.read_ops > 0 {
+            info!(
+                "Read {} in {} operations ({} per operation)",
+                HumanBytes(self.read_bytes),
+                HumanCount(self.read_ops),
+                HumanBytes(self.read_bytes / self.read_ops)
+            );
+        }
+        if self.write_ops > 0 {
+            info!(
+                "Wrote {} in {} operations ({} per operation)",
+                HumanBytes(self.write_bytes),
+                HumanCount(self.write_ops),
+                HumanBytes(self.write_bytes / self.write_ops)
+            );
+        }
     }
 }
