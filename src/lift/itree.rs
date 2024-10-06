@@ -47,7 +47,7 @@ impl<T: IntervalTreeEntry> IntervalTree<T> {
         self.root_node.is_empty()
     }
 
-    /// Removes the first (leftmost?) entry.
+    /// Returns the first (leftmost?) entry.
     pub fn first(&self) -> Option<&T> {
         self.root_node.first()
     }

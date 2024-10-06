@@ -3,6 +3,7 @@ use std::{
     os::fd::AsRawFd,
 };
 
+use indicatif::ProgressBar;
 use log::debug;
 use serde::Serialize;
 
@@ -33,9 +34,13 @@ pub(crate) fn do_scan(
     }
     .serialize(&mut serializer)?;
 
+    let pb = ProgressBar::new(file_length);
+
     let mut file_offset = 0u64;
     while file_offset < file_length {
         assert!(file_offset < file_length);
+        pb.set_position(file_offset);
+
         let mut fr = Box::new(FiemapRequestFull::default());
         fr.request.fm_start = file_offset;
         fr.request.fm_length = file_length - file_offset;
@@ -116,6 +121,7 @@ pub(crate) fn do_scan(
             }
         }
     }
+    pb.finish();
 
     fops.log_stats();
 

@@ -4,6 +4,7 @@ use std::{
     ops::Range,
 };
 
+use indicatif::ProgressBar;
 use itree::{IntervalTree, IntervalTreeEntry};
 use log::info;
 use serde::Deserialize;
@@ -20,6 +21,7 @@ struct OperationQueues {
     zeroing: VecDeque<Range<u64>>,
     csums: VecDeque<CsumOp>,
     copies: IntervalTree<CopyOp>,
+    device_length: u64,
 }
 
 pub(crate) fn do_lift(
@@ -30,10 +32,10 @@ pub(crate) fn do_lift(
     let mut fops = FileOps::new(dry_run);
 
     let opq: OperationQueues = load_mapping(&device, input, &mut fops)?;
-    perform_shuffles(&device, opq.copies, &mut fops)?;
-    fill_zeros(&device, opq.zeroing, &mut fops)?;
+    perform_shuffles(&device, opq.copies, &mut fops, opq.device_length)?;
+    fill_zeros(&device, opq.zeroing, &mut fops, opq.device_length)?;
     if !dry_run {
-        validate_csums(&device, opq.csums, &mut fops)?;
+        validate_csums(&device, opq.csums, &mut fops, opq.device_length)?;
     } else {
         info!("Dry-run, so not confirming final checksums.");
     }
@@ -61,10 +63,15 @@ fn load_mapping(
         zeroing: Default::default(),
         csums: Default::default(),
         copies: IntervalTree::new(0..device_length),
+        device_length,
     };
+
+    let pb = ProgressBar::new(device_length);
 
     let mut expected_next_offset = 0u64;
     while expected_next_offset < device_length {
+        pb.set_position(expected_next_offset);
+
         let e = ReportExtent::deserialize(&mut deserializer)?;
         assert_eq!(e.destination_offset, expected_next_offset);
         expected_next_offset += e.length;
@@ -91,6 +98,7 @@ fn load_mapping(
             }
         }
     }
+    pb.finish();
     info!("Extents loaded and csums match");
     Ok(result)
 }
@@ -99,10 +107,13 @@ fn perform_shuffles(
     device: &std::fs::File,
     mut copy_queue: IntervalTree<CopyOp>,
     fops: &mut FileOps,
+    device_length: u64,
 ) -> ResultType<()> {
     info!("Copying extent data");
+    let pb = ProgressBar::new(device_length);
     'copy_loop: while !copy_queue.is_empty() {
         let op: CopyOp = copy_queue.first().unwrap().clone();
+        pb.set_position(op.source.start);
 
         if op.source.start == op.destination_offset {
             // is a no-op op, mark as done.
@@ -181,6 +192,7 @@ fn perform_shuffles(
             assert!(copy_queue.insert(new_op));
         }
     }
+    pb.finish();
 
     Ok(())
 }
@@ -189,13 +201,17 @@ fn fill_zeros(
     device: &std::fs::File,
     mut zeroing_queue: VecDeque<Range<u64>>,
     fops: &mut FileOps,
+    device_length: u64,
 ) -> ResultType<()> {
     info!("Writing zero extents");
+    let pb = ProgressBar::new(device_length);
     while !zeroing_queue.is_empty() {
         let range = zeroing_queue.pop_front().unwrap();
+        pb.set_position(range.start);
 
         fops.fill_zeros(device, &range)?;
     }
+    pb.finish();
     Ok(())
 }
 
@@ -203,13 +219,17 @@ fn validate_csums(
     device: &std::fs::File,
     mut csums: VecDeque<CsumOp>,
     fops: &mut FileOps,
+    device_length: u64,
 ) -> ResultType<()> {
     info!("Validating final csums");
+    let pb = ProgressBar::new(device_length);
     while !csums.is_empty() {
         let csum = csums.pop_front().unwrap();
+        pb.set_position(csum.offset);
 
         fops.validate_checksum(device, csum.offset, csum.length, csum.csum)?;
     }
+    pb.finish();
     Ok(())
 }
 
