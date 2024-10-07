@@ -5,7 +5,7 @@ use std::{
     os::unix::fs::FileExt,
 };
 
-use indicatif::{HumanBytes, HumanCount};
+use indicatif::{HumanBytes, HumanCount, ProgressBar};
 use log::info;
 
 use crate::ResultType;
@@ -202,5 +202,43 @@ impl FileOps {
                 HumanBytes(self.write_bytes / self.write_ops)
             );
         }
+    }
+}
+
+pub(crate) struct SimpleProgress {
+    pb: ProgressBar,
+    max: u64,
+    last: Option<u64>,
+}
+
+impl SimpleProgress {
+    pub fn new(max: u64) -> Self {
+        Self {
+            pb: ProgressBar::new(100),
+            max,
+            last: None,
+        }
+    }
+
+    pub fn update(&mut self, value: u64) {
+        if value > self.max {
+            return self.update(self.max);
+        }
+
+        let value = (value * 100) / self.max;
+
+        match self.last {
+            Some(v) if v == value => {
+                // no change
+            }
+            _ => {
+                self.pb.set_position(value);
+                self.last = Some(value);
+            }
+        }
+    }
+
+    pub fn finish(self) {
+        self.pb.finish();
     }
 }

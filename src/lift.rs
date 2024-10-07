@@ -4,14 +4,13 @@ use std::{
     ops::Range,
 };
 
-use indicatif::ProgressBar;
 use itree::{IntervalTree, IntervalTreeEntry};
 use log::info;
 use serde::Deserialize;
 
 use crate::{
     report::{ReportExtent, ReportSummary},
-    utils::FileOps,
+    utils::{FileOps, SimpleProgress},
     ResultType,
 };
 
@@ -66,11 +65,11 @@ fn load_mapping(
         device_length,
     };
 
-    let pb = ProgressBar::new(device_length);
+    let mut pb = SimpleProgress::new(device_length);
 
     let mut expected_next_offset = 0u64;
     while expected_next_offset < device_length {
-        pb.set_position(expected_next_offset);
+        pb.update(expected_next_offset);
 
         let e = ReportExtent::deserialize(&mut deserializer)?;
         assert_eq!(e.destination_offset, expected_next_offset);
@@ -110,10 +109,10 @@ fn perform_shuffles(
     device_length: u64,
 ) -> ResultType<()> {
     info!("Copying extent data");
-    let pb = ProgressBar::new(device_length);
+    let mut pb = SimpleProgress::new(device_length);
     'copy_loop: while !copy_queue.is_empty() {
         let op: CopyOp = copy_queue.first().unwrap().clone();
-        pb.set_position(op.source.start);
+        pb.update(op.source.start);
 
         if op.source.start == op.destination_offset {
             // is a no-op op, mark as done.
@@ -204,10 +203,10 @@ fn fill_zeros(
     device_length: u64,
 ) -> ResultType<()> {
     info!("Writing zero extents");
-    let pb = ProgressBar::new(device_length);
+    let mut pb = SimpleProgress::new(device_length);
     while !zeroing_queue.is_empty() {
         let range = zeroing_queue.pop_front().unwrap();
-        pb.set_position(range.start);
+        pb.update(range.start);
 
         fops.fill_zeros(device, &range)?;
     }
@@ -222,10 +221,10 @@ fn validate_csums(
     device_length: u64,
 ) -> ResultType<()> {
     info!("Validating final csums");
-    let pb = ProgressBar::new(device_length);
+    let mut pb = SimpleProgress::new(device_length);
     while !csums.is_empty() {
         let csum = csums.pop_front().unwrap();
-        pb.set_position(csum.offset);
+        pb.update(csum.offset);
 
         fops.validate_checksum(device, csum.offset, csum.length, csum.csum)?;
     }
