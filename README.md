@@ -14,7 +14,7 @@ Prerequisite: The source filesystem must support FIEMAP.
 4. Unmount the target filesystem, and remount the original filesystem read-only.
 5. Perform the looplift "scan" step, store the output report file somewhere outside either filesystem.  The report should be small and compress easily.
 6. Unmount the original filesystem.
-7. Perform the looplift "lift" step with.
+7. Perform the looplift "lift" step.
 8. Mount the device, it should now be the target filesystem.
 9. (Optional) run `fstrim`.
 
