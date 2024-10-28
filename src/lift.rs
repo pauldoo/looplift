@@ -10,7 +10,7 @@ use serde::Deserialize;
 
 use crate::{
     report::{ReportExtent, ReportSummary},
-    utils::{FileOps, SimpleProgress},
+    utils::{validate_device_size, FileOps, SimpleProgress},
     ResultType,
 };
 
@@ -51,12 +51,12 @@ fn load_mapping(
     input: &mut impl Read,
     fops: &mut FileOps,
 ) -> ResultType<OperationQueues> {
-    let device_length = device.metadata()?.len();
     info!("Parsing report and validating initial checksums.");
 
     let mut deserializer = serde_json::Deserializer::from_reader(input);
     let sr = ReportSummary::deserialize(&mut deserializer)?;
-    assert_eq!(sr.device_length, device_length);
+    validate_device_size(device, sr.device_length)?;
+    let device_length = sr.device_length;
 
     let mut result = OperationQueues {
         zeroing: Default::default(),

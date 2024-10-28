@@ -9,7 +9,7 @@ use serde::Serialize;
 use crate::{
     fiemap::{fs_ioc_fiemap, ioctl, FiemapExtentFlag, FiemapFlag, FiemapRequestFull},
     report::{ExtentSource, ReportExtent, ReportSummary},
-    utils::{FileOps, SimpleProgress},
+    utils::{validate_device_size, FileOps, SimpleProgress},
     ResultType,
 };
 
@@ -19,9 +19,7 @@ pub(crate) fn do_scan(
     out: &mut impl io::Write,
 ) -> ResultType<()> {
     let file_length = file.metadata()?.len();
-    if file_length != device.metadata()?.len() {
-        return Err("File length should be the same as the device.".into());
-    }
+    validate_device_size(device, file_length)?;
 
     let mut fops = FileOps::new(
         true, /* flag doesn't matter, as we don't attempt writes during scan. */

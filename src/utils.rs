@@ -242,3 +242,17 @@ impl SimpleProgress {
         self.pb.finish();
     }
 }
+
+/**
+ * Verify that the device is at least as big as the provided size.
+ *
+ * This is performed by attempting to read the very last byte.
+ */
+pub(crate) fn validate_device_size(device: &std::fs::File, minimum_size: u64) -> ResultType<()> {
+    assert!(minimum_size >= 1);
+    let mut buf: [u8; 1] = [0u8];
+    device
+        .read_exact_at(&mut buf, minimum_size - 1)
+        .map_err(|_| "Failed to verify that device is at least as large as the file to lift.")?;
+    Ok(())
+}
