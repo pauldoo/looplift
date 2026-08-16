@@ -83,7 +83,8 @@ def cleanup():
             execute(f"sudo umount {test_dir_inner} || true")
         execute(f"sudo umount {test_dir} || true")
         os.rmdir(test_dir)
-    os.remove(test_image)
+    if os.path.isfile(test_image):
+        os.remove(test_image)
 
 def create_outer_fs(fs_type):
     print("Creating initial outer FS")
@@ -108,7 +109,7 @@ def copy_test_data():
 
 def move_test_data_to_inner():
     print("Moving test data from outer to inner FS")
-    execute(f"sudo rsync -a -x -H -A -X --sparse --remove-source-files --exclude {image_filename} {test_dir}/ {test_dir_inner}/")
+    execute(f"sudo rsync -a -x -H -A --sparse --remove-source-files --exclude {image_filename} {test_dir}/ {test_dir_inner}/")
 
 def remount_outer_ro():
     execute(f"sudo umount {test_dir_inner}")
