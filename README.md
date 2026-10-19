@@ -8,7 +8,7 @@ Looplift is a CLI tool that "lifts" files from within a filesystem, directly ont
 
 Prerequisite: The source filesystem must support FIEMAP.
 
-1. Create a new sparse file within the existing to-be-converted filesystem.  If the host FS supports transparent compression or encryption, it must be disabled for this file.
+1. Create a new sparse file within the existing to-be-converted filesystem. Make this exactly the same length as the target device or partition. If the host FS supports transparent compression or encryption, it must be disabled for this file.
 2. Format the sparse file with the target filesystem type, and mount (recommend to include `discard` option).
 3. Move files from the original filesystem to the inner target filesystem.
 4. Unmount the target filesystem, and remount the original filesystem read-only.
